@@ -13,7 +13,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Perplexity Made By Farid',
+      debugShowCheckedModeBanner:false,
       theme:ThemeData(
         scaffoldBackgroundColor: AppColors.background,
         colorScheme:ColorScheme.fromSeed(seedColor: AppColors.submitButton),
