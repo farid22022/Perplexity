@@ -54,4 +54,14 @@ macos
 test
 web
 windows
+/android
+/ios
+/linux
+/macos
+/windows
+/test
+/web
+
+
+.metadata
 
