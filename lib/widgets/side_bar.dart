@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:perplexity/pages/profile_page.dart';
 import 'package:perplexity/theme/color.dart';
 import 'package:perplexity/widgets/side_bar_button.dart';
 
@@ -32,6 +33,18 @@ class _SideBarState extends State<SideBar> {
                       ? CrossAxisAlignment.center
                       : CrossAxisAlignment.start,
               children: [
+                // In _SideBarState.build, add to the Column children:
+                SideBarButton(
+                  collapsed: collapsed,
+                  icon: Icons.person,
+                  text: "Profile",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ProfilePage()),
+                    );
+                  },
+                ),
                 SideBarButton(
                   collapsed: collapsed,
                   icon: Icons.add,
@@ -57,6 +70,7 @@ class _SideBarState extends State<SideBar> {
                   icon: Icons.cloud_outlined,
                   text: "Library",
                 ),
+
 
                 const Spacer(),
               ],

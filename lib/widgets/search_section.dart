@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:perplexity/services/chat_web_service.dart';
 import 'package:perplexity/theme/color.dart';
 import 'package:perplexity/widgets/search_bar_button.dart';
+import 'dart:convert';
 
 class SearchSection extends StatefulWidget {
   const SearchSection({super.key});
@@ -10,14 +11,69 @@ class SearchSection extends StatefulWidget {
   State<SearchSection> createState() => _SearchSectionState();
 }
 
-class _SearchSectionState extends State<SearchSection> {
+class _SearchSectionState extends State<SearchSection> with SingleTickerProviderStateMixin {
   final queryController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  final ChatWebService _chatWebService = ChatWebService();
+  List<Map<String, dynamic>> _messages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(_controller);
+
+    // Initialize WebSocket and listen for messages
+    _chatWebService.connect();
+    _chatWebService.messages.listen((message) {
+      final data = json.decode(message);
+      setState(() {
+        _messages.add(data);
+      });
+      // Scroll to the latest message
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+      if (data['type'] == 'error') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              data['data'],
+              style: TextStyle(color: AppColors.whiteColor),
+            ),
+            backgroundColor: AppColors.cardColor,
+          ),
+        );
+      }
+    }, onError: (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'WebSocket error: $error',
+            style: TextStyle(color: AppColors.whiteColor),
+          ),
+          backgroundColor: AppColors.cardColor,
+        ),
+      );
+    });
+  }
 
   @override
   void dispose() {
-    // TODO: implement dispose
-    super.dispose();
+    _controller.dispose();
     queryController.dispose();
+    _scrollController.dispose();
+    _chatWebService.disconnect();
+    super.dispose();
   }
 
   @override
@@ -32,7 +88,7 @@ class _SearchSectionState extends State<SearchSection> {
             fontSize: 40,
             fontWeight: FontWeight.w400,
             height: 2,
-            letterSpacing: -.5,
+            letterSpacing: -0.5,
           ),
         ),
         const SizedBox(height: 20),
@@ -59,6 +115,7 @@ class _SearchSectionState extends State<SearchSection> {
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
                   ),
+                  style: TextStyle(color: AppColors.whiteColor),
                 ),
               ),
               Padding(
@@ -76,19 +133,52 @@ class _SearchSectionState extends State<SearchSection> {
                     ),
                     const Spacer(),
                     GestureDetector(
-                      onTap: () {
-                        ChatWebService().chat(queryController.text.trim());
+                      onTapDown: (_) => _controller.forward(),
+                      onTapUp: (_) {
+                        _controller.reverse();
+                        if (queryController.text.trim().isNotEmpty) {
+                          // Send query and add to messages
+                          _chatWebService.chat(queryController.text.trim());
+                          setState(() {
+                            _messages.add({
+                              'type': 'query',
+                              'data': queryController.text.trim(),
+                            });
+                          });
+                          queryController.clear();
+                          // Scroll to the latest message
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _scrollController.animateTo(
+                              _scrollController.position.maxScrollExtent,
+                              duration: Duration(milliseconds: 300),
+                              curve: Curves.easeOut,
+                            );
+                          });
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Please enter a search query',
+                                style: TextStyle(color: AppColors.whiteColor),
+                              ),
+                              backgroundColor: AppColors.cardColor,
+                            ),
+                          );
+                        }
                       },
-                      child: Container(
-                        padding: EdgeInsets.all(9),
-                        decoration: BoxDecoration(
-                          color: AppColors.submitButton,
-                          borderRadius: BorderRadius.circular(40),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_forward,
-                          color: AppColors.background,
-                          size: 16,
+                      child: ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: Container(
+                          padding: EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: AppColors.submitButton,
+                            borderRadius: BorderRadius.circular(40),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward,
+                            color: AppColors.background,
+                            size: 16,
+                          ),
                         ),
                       ),
                     ),
@@ -96,6 +186,44 @@ class _SearchSectionState extends State<SearchSection> {
                 ),
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            itemCount: _messages.length,
+            itemBuilder: (context, index) {
+              final message = _messages[index];
+              final isQuery = message['type'] == 'query';
+              final isError = message['type'] == 'error';
+              return Align(
+                alignment: isQuery ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isQuery
+                        ? AppColors.submitButton
+                        : isError
+                            ? AppColors.cardColor
+                            : AppColors.searchBar,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    isQuery
+                        ? message['data']
+                        : isError
+                            ? 'Error: ${message['data']}'
+                            : message['data'],
+                    style: TextStyle(
+                      color: isQuery ? AppColors.background : AppColors.whiteColor,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],
